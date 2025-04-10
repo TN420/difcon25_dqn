@@ -75,7 +75,7 @@ class Graph:
         for i in range(len(legend_indexed)):
             leg.legendHandles[i].set_color('k')
 
-    def draw_stats(self, vals, vals1, vals2, vals3, vals4, vals5, vals6):
+    def draw_stats(self, vals, vals1, vals2, vals3, vals4, vals5, vals6, anomalies):
         self.ax1 = plt.subplot(self.gs[0, 1])
         self.ax1.plot(vals)
         self.ax1.set_xlim(self.xlim)
@@ -116,12 +116,15 @@ class Graph:
         self.ax5.set_title('Coverage Ratio')
 
         self.ax6 = plt.subplot(self.gs[1, 2])
-        self.ax6.plot(vals5)
+        self.ax6.plot(vals5, label='Block ratio')
+        anomaly_indices = [i for i, a in enumerate(anomalies) if a == -1]
+        self.ax6.scatter(anomaly_indices, [vals5[i] for i in anomaly_indices], color='red', label='Anomalies')
         self.ax6.set_xlim(self.xlim)
         self.ax6.set_xticks(locs)
         self.ax6.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
         self.ax6.use_sticky_edges = False
         self.ax6.set_title('Block ratio')
+        self.ax6.legend()
 
         self.ax7 = plt.subplot(self.gs[2, 2])
         self.ax7.plot(vals6)

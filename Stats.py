@@ -1,5 +1,7 @@
 # Stats.py
 
+from sklearn.ensemble import IsolationForest  # Import Isolation Forest
+
 class Stats:
     def __init__(self, env, base_stations, clients, area):
         self.env = env
@@ -17,6 +19,8 @@ class Stats:
         self.connect_attempt = []
         self.block_count = []
         self.handover_count = []
+        self.block_ratio_anomalies = []  # Store anomaly detection results
+        self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)  # Initialize Isolation Forest
 
     def get_stats(self):
         return (
@@ -27,6 +31,7 @@ class Stats:
             self.coverage_ratio,
             self.block_count,
             self.handover_count,
+            self.block_ratio_anomalies,  # Include anomalies in stats
         )
 
     def collect(self):
@@ -37,6 +42,12 @@ class Stats:
         while True:
             self.block_count[-1] /= self.connect_attempt[-1] if self.connect_attempt[-1] != 0 else 1
             self.handover_count[-1] /= self.connect_attempt[-1] if self.connect_attempt[-1] != 0 else 1
+
+            # Detect anomalies in block ratio
+            if len(self.block_count) > 10:  # Ensure enough data points for training
+                block_ratios = [[b] for b in self.block_count[-10:]]  # Use the last 10 block ratios
+                predictions = self.isolation_forest.fit_predict(block_ratios)
+                self.block_ratio_anomalies.append(predictions[-1])  # Append the latest prediction (-1 for anomaly, 1 for normal)
 
             self.total_connected_users_ratio.append(self.get_total_connected_users_ratio())
             self.total_used_bw.append(self.get_total_used_bw())
