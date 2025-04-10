@@ -19,7 +19,7 @@ class Slice:
         self.capacity = simpy.Container(capacity_bandwidth, capacity_bandwidth)
         self.connected_users = 0
 
-    def is_avaliable(self):
+    def is_available(self):
         return self.capacity.level > 0
 
     def get_consumable_share(self):

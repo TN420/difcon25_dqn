@@ -2,7 +2,6 @@
 
 import operator
 import random
-
 from Utils import distance, KDTree
 
 class Client:
@@ -94,14 +93,14 @@ class Client:
 
         self.stat_collector.incr_connect_attempt(self)
 
-        if s.is_avaliable():
+        if s.is_available():
             s.connected_users += 1
             self.connected = True
             print(f'[{int(self.env.now)}] Client_{self.pk} [{self.x}, {self.y}] connected to slice={self.get_slice()} @ {self.base_station}')
             return True
         else:
             self.assign_closest_base_station(exclude=[self.base_station.pk])
-            if self.base_station is not None and self.get_slice().is_avaliable():
+            if self.base_station is not None and self.get_slice().is_available():
                 self.stat_collector.incr_handover_count(self)
             elif self.base_station is not None:
                 self.stat_collector.incr_block_count(self)
