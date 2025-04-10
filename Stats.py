@@ -17,7 +17,7 @@ class Stats:
         self.connect_attempt = []
         self.block_count = []
         self.handover_count = []
-    
+
     def get_stats(self):
         return (
             self.total_connected_users_ratio,

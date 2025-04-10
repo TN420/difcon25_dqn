@@ -1,7 +1,6 @@
 # Utils.py
 
 import math
-
 from sklearn.neighbors import KDTree as kdt
 
 def distance(a, b):

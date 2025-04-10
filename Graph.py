@@ -6,8 +6,8 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, FuncFormatter
 import randomcolor
-from Utils import format_bps
 
+from Utils import format_bps
 
 class Graph:
     def __init__(self, base_stations, clients, xlim, map_limits,

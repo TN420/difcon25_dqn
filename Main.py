@@ -4,6 +4,7 @@ import math
 import os
 import random
 import sys
+
 import simpy
 import yaml
 
@@ -14,45 +15,44 @@ from Distributor import Distributor
 from Graph import Graph
 from Slice import Slice
 from Stats import Stats
+
 from Utils import KDTree
 
 
 def get_dist(d):
     return {
-        'randrange': random.randrange, # start, stop, step
-        'randint': random.randint, # a, b
+        'randrange': random.randrange,
+        'randint': random.randint,
         'random': random.random,
-        'uniform': random, # a, b
-        'triangular': random.triangular, # low, high, mode
-        'beta': random.betavariate, # alpha, beta
-        'expo': random.expovariate, # lambda
-        'gamma': random.gammavariate, # alpha, beta
-        'gauss': random.gauss, # mu, sigma
-        'lognorm': random.lognormvariate, # mu, sigma
-        'normal': random.normalvariate, # mu, sigma
-        'vonmises': random.vonmisesvariate, # mu, kappa
-        'pareto': random.paretovariate, # alpha
-        'weibull': random.weibullvariate # alpha, beta
+        'uniform': random.uniform,
+        'triangular': random.triangular,
+        'beta': random.betavariate,
+        'expo': random.expovariate,
+        'gamma': random.gammavariate,
+        'gauss': random.gauss,
+        'lognorm': random.lognormvariate,
+        'normal': random.normalvariate,
+        'vonmises': random.vonmisesvariate,
+        'pareto': random.paretovariate,
+        'weibull': random.weibullvariate
     }.get(d)
 
 
 def get_random_mobility_pattern(vals, mobility_patterns):
     i = 0
     r = random.random()
-
     while vals[i] < r:
         i += 1
-
     return mobility_patterns[i]
 
 
 def get_random_slice_index(vals):
     i = 0
     r = random.random()
-
     while vals[i] < r:
         i += 1
     return i
+
 
 if len(sys.argv) != 2:
     print('Please type an input file.')
@@ -79,7 +79,7 @@ BASE_STATIONS = data['base_stations']
 CLIENTS = data['clients']
 
 if SETTINGS['logging']:
-    sys.stdout = open(SETTINGS['log_file'],'wt')
+    sys.stdout = open(SETTINGS['log_file'], 'wt')
 else:
     sys.stdout = open(os.devnull, 'w')
 
@@ -103,26 +103,23 @@ for name, s in SLICES_INFO.items():
     usage_patterns[name] = Distributor(name, get_dist(s['usage_pattern']['distribution']), *s['usage_pattern']['params'])
 
 base_stations = []
-i = 0
-for b in BASE_STATIONS:
+for i, b in enumerate(BASE_STATIONS):
     slices = []
     ratios = b['ratios']
     capacity = b['capacity_bandwidth']
     for name, s in SLICES_INFO.items():
         s_cap = capacity * ratios[name]
-        # TODO remove bandwidth max
-        s = Slice(name, ratios[name], 0, s['client_weight'],
-                  s['delay_tolerance'],
-                  s['qos_class'], s['bandwidth_guaranteed'],
-                  s['bandwidth_max'], s_cap, usage_patterns[name])
-        s.capacity = simpy.Container(env, init=s_cap, capacity=s_cap)
-        slices.append(s)
-    base_station = BaseStation(i, Coverage((b['x'], b['y']), b['coverage']), capacity, slices)
-    base_stations.append(base_station)
-    i += 1
+        slice_obj = Slice(name, ratios[name], 0, s['client_weight'],
+                          s['delay_tolerance'],
+                          s['qos_class'], s['bandwidth_guaranteed'],
+                          s['bandwidth_max'], s_cap, usage_patterns[name])
+        slice_obj.capacity = simpy.Container(env, init=s_cap, capacity=s_cap)
+        slices.append(slice_obj)
+    bs = BaseStation(i, Coverage((b['x'], b['y']), b['coverage']), capacity, slices)
+    base_stations.append(bs)
 
 ufp = CLIENTS['usage_frequency']
-usage_freq_pattern = Distributor(f'ufp', get_dist(ufp['distribution']), *ufp['params'], divide_scale=ufp['divide_scale'])
+usage_freq_pattern = Distributor('ufp', get_dist(ufp['distribution']), *ufp['params'], divide_scale=ufp['divide_scale'])
 
 x_vals = SETTINGS['statistics_params']['x']
 y_vals = SETTINGS['statistics_params']['y']
@@ -136,18 +133,18 @@ for i in range(NUM_CLIENTS):
     location_y = get_dist(loc_y['distribution'])(*loc_y['params'])
 
     mobility_pattern = get_random_mobility_pattern(mb_weights, mobility_patterns)
-
     connected_slice_index = get_random_slice_index(slice_weights)
-    c = Client(i, env, location_x, location_y,
-               mobility_pattern, usage_freq_pattern.generate_scaled(), connected_slice_index, stats)
-    clients.append(c)
+
+    client = Client(i, env, location_x, location_y,
+                    mobility_pattern, usage_freq_pattern.generate_scaled(),
+                    connected_slice_index, stats)
+    clients.append(client)
 
 KDTree.limit = SETTINGS['limit_closest_base_stations']
 KDTree.run(clients, base_stations, 0)
 
 stats.clients = clients
 env.process(stats.collect())
-
 env.run(until=int(SETTINGS['simulation_time']))
 
 for client in clients:
@@ -164,7 +161,7 @@ print(stats.get_stats())
 if SETTINGS['plotting_params']['plotting']:
     xlim_left = int(SETTINGS['simulation_time'] * SETTINGS['statistics_params']['warmup_ratio'])
     xlim_right = int(SETTINGS['simulation_time'] * (1 - SETTINGS['statistics_params']['cooldown_ratio'])) + 1
-    
+
     graph = Graph(base_stations, clients, (xlim_left, xlim_right),
                   ((x_vals['min'], x_vals['max']), (y_vals['min'], y_vals['max'])),
                   output_dpi=SETTINGS['plotting_params']['plot_file_dpi'],
