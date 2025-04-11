@@ -21,17 +21,17 @@ class Stats:
         self.handover_count = []
         self.block_ratio_anomalies = []  # Store anomaly detection results
         self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)  # Initialize Isolation Forest
+        self.base_station_capacities = {bs.pk: [] for bs in base_stations}  # Track capacity over time
 
     def get_stats(self):
         return (
             self.total_connected_users_ratio,
             self.total_used_bw,
-            self.avg_slice_load_ratio,
-            self.avg_slice_client_count,
+            self.avg_slice_client_count,  # Removed avg_slice_load_ratio
             self.coverage_ratio,
             self.block_count,
-            self.handover_count,
             self.block_ratio_anomalies,  # Include anomalies in stats
+            self.base_station_capacities,  # Include base station capacities in stats
         )
 
     def collect(self):
@@ -54,6 +54,11 @@ class Stats:
             self.avg_slice_load_ratio.append(self.get_avg_slice_load_ratio())
             self.avg_slice_client_count.append(self.get_avg_slice_client_count())
             self.coverage_ratio.append(self.get_coverage_ratio())
+
+            # Track base station capacities
+            for bs in self.base_stations:
+                total_capacity = sum(sl.capacity.level for sl in bs.slices)
+                self.base_station_capacities[bs.pk].append(total_capacity)
 
             self.connect_attempt.append(0)
             self.block_count.append(0)
@@ -120,3 +125,13 @@ class Stats:
     def is_client_in_coverage(self, client):
         xs, ys = self.area
         return True if xs[0] <= client.x <= xs[1] and ys[0] <= client.y <= ys[1] else False
+
+    def adjust_base_station_capacity(self):
+        """Adjust base station capacity to reduce anomalies."""
+        for bs in self.base_stations:
+            for sl in bs.slices:
+                if sl.capacity.level / sl.capacity.capacity < 0.2:  # If capacity usage is high
+                    increase = sl.capacity.capacity * 0.1  # Increase by 10%
+                    sl.capacity.capacity += increase
+                    sl.capacity.put(increase)  # Add the increased capacity
+                    print(f"Adjusted capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")

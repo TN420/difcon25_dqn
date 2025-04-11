@@ -1,7 +1,7 @@
 # YAML config file
 
 settings:
-  simulation_time: 1000
+  simulation_time: 100
   num_clients: 800
   limit_closest_base_stations: 1
   statistics_params:

@@ -27,7 +27,6 @@ class Graph:
         # colors = [np.random.randint(256*0.2, 256*0.7+1, size=(3,))/256 for __ in range(len(self.base_stations))]
         for c, bs in zip(colors, self.base_stations):
             bs.color = c
-        # TODO prevent similar colors
 
     def draw_live(self, *stats):
         ani = animation.FuncAnimation(self.fig, self.draw_all, fargs=stats, interval=1000)
@@ -75,7 +74,7 @@ class Graph:
         for i in range(len(legend_indexed)):
             leg.legendHandles[i].set_color('k')
 
-    def draw_stats(self, vals, vals1, vals2, vals3, vals4, vals5, vals6, anomalies):
+    def draw_stats(self, vals, vals1, vals2, vals3, vals5, anomalies, capacities):
         self.ax1 = plt.subplot(self.gs[0, 1])
         self.ax1.plot(vals)
         self.ax1.set_xlim(self.xlim)
@@ -94,65 +93,46 @@ class Graph:
         self.ax2.use_sticky_edges = False
         self.ax2.set_title('Total Bandwidth Usage')
 
-        self.ax3 = plt.subplot(self.gs[2, 1])
-        self.ax3.plot(vals2)
+        self.ax3 = plt.subplot(self.gs[0, 2])
+        self.ax3.plot(vals3)
         self.ax3.set_xlim(self.xlim)
         self.ax3.set_xticks(locs)
         self.ax3.use_sticky_edges = False
-        self.ax3.set_title('Bandwidth Usage Ratio in Slices (Averaged)')
+        self.ax3.set_title('Client Count Ratio per Slice')
 
-        self.ax4 = plt.subplot(self.gs[3, 1])
-        self.ax4.plot(vals3)
-        self.ax4.set_xlim(self.xlim)
-        self.ax4.set_xticks(locs)
-        self.ax4.use_sticky_edges = False
-        self.ax4.set_title('Client Count Ratio per Slice')
-
-        self.ax5 = plt.subplot(self.gs[0, 2])
-        self.ax5.plot(vals4)
+        self.ax5 = plt.subplot(self.gs[2, 1])
+        self.ax5.plot(vals5, label='Block ratio')
+        anomaly_indices = [i for i, a in enumerate(anomalies) if a == -1]
+        self.ax5.scatter(anomaly_indices, [vals5[i] for i in anomaly_indices], color='red', label='Anomalies')
         self.ax5.set_xlim(self.xlim)
         self.ax5.set_xticks(locs)
+        self.ax5.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
         self.ax5.use_sticky_edges = False
-        self.ax5.set_title('Coverage Ratio')
+        self.ax5.set_title('Block ratio')
+        self.ax5.legend()
 
         self.ax6 = plt.subplot(self.gs[1, 2])
-        self.ax6.plot(vals5, label='Block ratio')
-        anomaly_indices = [i for i, a in enumerate(anomalies) if a == -1]
-        self.ax6.scatter(anomaly_indices, [vals5[i] for i in anomaly_indices], color='red', label='Anomalies')
+        for bs_id, capacity in capacities.items():
+            self.ax6.plot(capacity, label=f'BS_{bs_id}')
         self.ax6.set_xlim(self.xlim)
         self.ax6.set_xticks(locs)
-        self.ax6.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
         self.ax6.use_sticky_edges = False
-        self.ax6.set_title('Block ratio')
-        self.ax6.legend()
+        self.ax6.set_title('Base Station Capacities')
+        self.ax6.legend(loc='upper right', fontsize='small')
 
-        self.ax7 = plt.subplot(self.gs[2, 2])
-        self.ax7.plot(vals6)
-        self.ax7.set_xlim(self.xlim)
-        self.ax7.set_xticks(locs)
-        self.ax7.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
-        self.ax7.use_sticky_edges = False
-        self.ax7.set_title('Handover ratio')
-
-        self.ax8 = plt.subplot(self.gs[3, 2])
+        self.ax8 = plt.subplot(self.gs[2, 2])
         row_labels = [
             'Initial number of clients',
             'Average connected clients',
             'Average bandwidth usage',
-            'Average load factor of slices',
-            'Average coverage ratio',
             'Average block ratio',
-            'Average handover ratio',
         ]
         l, r = self.xlim
         cell_text = [
             [f'{len(self.clients)}'],
             [f'{mean(vals[l:r]):.2f}'],
             [f'{format_bps(mean(vals1[l:r]), return_float=True)}'],
-            [f'{mean(vals2[l:r]):.2f}'],
-            [f'{mean(vals4[l:r]):.2f}'],
-            [f'{mean(vals5[l:r]):.4f}'],
-            [f'{mean(vals6[l:r]):.4f}'],
+            [f'{mean(vals5[l:r]):.4f}']
         ]
         
         self.ax8.axis('off')
