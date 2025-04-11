@@ -1,6 +1,9 @@
 # Stats.py
 
 from sklearn.ensemble import IsolationForest  # Import Isolation Forest
+from skopt import gp_minimize  # Import Bayesian optimization
+from skopt.space import Real
+from statistics import mean  # Add this import
 
 class Stats:
     def __init__(self, env, base_stations, clients, area):
@@ -22,6 +25,8 @@ class Stats:
         self.block_ratio_anomalies = []  # Store anomaly detection results
         self.isolation_forest = IsolationForest(contamination=0.05, random_state=42)  # Initialize Isolation Forest
         self.base_station_capacities = {bs.pk: [] for bs in base_stations}  # Track capacity over time
+        self.optimization_space = [Real(0.1, 2.0, name=f"scale_bs_{bs.pk}") for bs in base_stations]
+        self.optimization_results = []
 
     def get_stats(self):
         return (
@@ -127,11 +132,33 @@ class Stats:
         return True if xs[0] <= client.x <= xs[1] and ys[0] <= client.y <= ys[1] else False
 
     def adjust_base_station_capacity(self):
-        """Adjust base station capacity to reduce anomalies."""
-        for bs in self.base_stations:
+        """Adjust base station capacity using Bayesian optimization."""
+        def objective_function(scaling_factors):
+            # Apply scaling factors to base station capacities
+            for scale, bs in zip(scaling_factors, self.base_stations):
+                for sl in bs.slices:
+                    new_capacity = sl.capacity_bandwidth * scale
+                    current_capacity = sl.capacity.capacity
+                    if new_capacity > current_capacity:
+                        sl.capacity.put(new_capacity - current_capacity)  # Add the increased capacity
+                    elif new_capacity < current_capacity:
+                        sl.capacity.get(current_capacity - new_capacity)  # Reduce the capacity
+                    sl.capacity._capacity = new_capacity  # Update the internal capacity value
+            # Return the average block ratio as the objective to minimize
+            return mean(self.block_count[-10:]) if len(self.block_count) >= 10 else 1.0
+
+        # Perform Bayesian optimization
+        result = gp_minimize(objective_function, self.optimization_space, n_calls=10, random_state=42)
+        self.optimization_results.append(result)
+
+        # Apply the best scaling factors
+        for scale, bs in zip(result.x, self.base_stations):
             for sl in bs.slices:
-                if sl.capacity.level / sl.capacity.capacity < 0.2:  # If capacity usage is high
-                    increase = sl.capacity.capacity * 0.1  # Increase by 10%
-                    sl.capacity.capacity += increase
-                    sl.capacity.put(increase)  # Add the increased capacity
-                    print(f"Adjusted capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
+                new_capacity = sl.capacity_bandwidth * scale
+                current_capacity = sl.capacity.capacity
+                if new_capacity > current_capacity:
+                    sl.capacity.put(new_capacity - current_capacity)  # Add the increased capacity
+                elif new_capacity < current_capacity:
+                    sl.capacity.get(current_capacity - new_capacity)  # Reduce the capacity
+                sl.capacity._capacity = new_capacity  # Update the internal capacity value
+                print(f"Optimized capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")

@@ -144,12 +144,12 @@ KDTree.run(clients, base_stations, 0)
 stats.clients = clients
 env.process(stats.collect())
 
-# Add a process to monitor anomalies and adjust capacity
+# Add a process to monitor anomalies and optimize capacity
 def monitor_anomalies(env, stats):
     while True:
         yield env.timeout(1)  # Check every second
         if stats.block_ratio_anomalies and stats.block_ratio_anomalies[-1] == -1:  # If the latest anomaly is detected
-            stats.adjust_base_station_capacity()
+            stats.adjust_base_station_capacity()  # Trigger Bayesian optimization
 
 env.process(monitor_anomalies(env, stats))
 env.run(until=int(SETTINGS['simulation_time']))
