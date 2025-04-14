@@ -27,6 +27,9 @@ class Stats:
         self.base_station_capacities = {bs.pk: [] for bs in base_stations}  # Track capacity over time
         self.optimization_space = [Real(0.1, 2.0, name=f"scale_bs_{bs.pk}") for bs in base_stations]
         self.optimization_results = []
+        self.block_ratio_upper_threshold = 0.3  # Example upper threshold
+        self.block_ratio_lower_threshold = 0.1  # Example lower threshold
+        self.capacity_adjustment_factor = 0.1  # Adjust capacity by 10%
 
     def get_stats(self):
         return (
@@ -65,10 +68,37 @@ class Stats:
                 total_capacity = sum(sl.capacity.level for sl in bs.slices)
                 self.base_station_capacities[bs.pk].append(total_capacity)
 
+            # Adjust base station capacity based on block ratio thresholds
+            if len(self.block_count) > 10:  # Ensure enough data points
+                avg_block_ratio = mean(self.block_count[-10:])
+                if avg_block_ratio > self.block_ratio_upper_threshold:
+                    self.increase_base_station_capacity()
+                elif avg_block_ratio < self.block_ratio_lower_threshold:
+                    self.decrease_base_station_capacity()
+
             self.connect_attempt.append(0)
             self.block_count.append(0)
             self.handover_count.append(0)
             yield self.env.timeout(1)
+
+    def increase_base_station_capacity(self):
+        """Increase base station capacity."""
+        for bs in self.base_stations:
+            for sl in bs.slices:
+                additional_capacity = sl.capacity_bandwidth * self.capacity_adjustment_factor
+                sl.capacity.put(additional_capacity)
+                sl.capacity._capacity += additional_capacity
+                print(f"Increased capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
+
+    def decrease_base_station_capacity(self):
+        """Decrease base station capacity."""
+        for bs in self.base_stations:
+            for sl in bs.slices:
+                reduction_capacity = sl.capacity_bandwidth * self.capacity_adjustment_factor
+                if sl.capacity.level >= reduction_capacity:  # Ensure we don't reduce below current usage
+                    sl.capacity.get(reduction_capacity)
+                    sl.capacity._capacity -= reduction_capacity
+                    print(f"Decreased capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
 
     def get_total_connected_users_ratio(self):
         t, cc = 0, 0

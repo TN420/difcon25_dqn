@@ -122,6 +122,9 @@ usage_freq_pattern = Distributor('ufp', get_dist(ufp['distribution']), *ufp['par
 x_vals = SETTINGS['statistics_params']['x']
 y_vals = SETTINGS['statistics_params']['y']
 stats = Stats(env, base_stations, None, ((x_vals['min'], x_vals['max']), (y_vals['min'], y_vals['max'])))
+stats.block_ratio_upper_threshold = SETTINGS['block_ratio_upper_threshold']
+stats.block_ratio_lower_threshold = SETTINGS['block_ratio_lower_threshold']
+stats.capacity_adjustment_factor = SETTINGS['capacity_adjustment_factor']
 
 clients = []
 for i in range(NUM_CLIENTS):

@@ -1,8 +1,8 @@
 # YAML config file
 
 settings:
-  simulation_time: 100
-  num_clients: 800
+  simulation_time: 300
+  num_clients: 1000
   limit_closest_base_stations: 1
   statistics_params:
     warmup_ratio: 0.05
@@ -23,6 +23,9 @@ settings:
     plot_file: output.png # name of the plot image
     plot_file_dpi: 1000 # dots per inch for plot image
     scatter_size: 15  
+  block_ratio_upper_threshold: 0.03
+  block_ratio_lower_threshold: 0.01
+  capacity_adjustment_factor: 0.5
   
 slices:
   iot:
@@ -55,8 +58,8 @@ base_stations:
     coverage: 900
     capacity_bandwidth: 10000000000
     ratios:
-      iot: 0.4
-      data: 0.6
+      iot: 0.5
+      data: 0.5
   
 mobility_patterns:
   normal_btw_0_1000:
