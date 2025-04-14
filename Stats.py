@@ -4,6 +4,8 @@ from sklearn.ensemble import IsolationForest  # Import Isolation Forest
 from skopt import gp_minimize  # Import Bayesian optimization
 from skopt.space import Real
 from statistics import mean  # Add this import
+from DQNAgent import DQNAgent
+import numpy as np
 
 class Stats:
     def __init__(self, env, base_stations, clients, area):
@@ -30,6 +32,12 @@ class Stats:
         self.block_ratio_upper_threshold = 0.3  # Example upper threshold
         self.block_ratio_lower_threshold = 0.1  # Example lower threshold
         self.capacity_adjustment_factor = 0.1  # Adjust capacity by 10%
+
+        # DQN Agent
+        self.state_size = len(base_stations) + 1  # Example: base station capacities + block ratio
+        self.action_size = len(base_stations)  # Example: actions for each base station
+        self.dqn_agent = DQNAgent(self.state_size, self.action_size)
+        self.batch_size = 32
 
     def get_stats(self):
         return (
@@ -75,6 +83,28 @@ class Stats:
                     self.increase_base_station_capacity()
                 elif avg_block_ratio < self.block_ratio_lower_threshold:
                     self.decrease_base_station_capacity()
+
+            # Prepare state for DQN
+            state = np.array([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
+            state = np.reshape(state, [1, self.state_size])
+
+            # Take action using DQN
+            action = self.dqn_agent.act(state)
+            self.allocate_resources(action)
+
+            # Calculate reward (negative block ratio)
+            reward = -self.block_count[-1]
+
+            # Prepare next state
+            next_state = np.array([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
+            next_state = np.reshape(next_state, [1, self.state_size])
+
+            # Store experience in DQN memory
+            done = False  # Simulation is ongoing
+            self.dqn_agent.remember(state, action, reward, next_state, done)
+
+            # Train the DQN agent
+            self.dqn_agent.replay(self.batch_size)
 
             self.connect_attempt.append(0)
             self.block_count.append(0)
@@ -192,3 +222,29 @@ class Stats:
                     sl.capacity.get(current_capacity - new_capacity)  # Reduce the capacity
                 sl.capacity._capacity = new_capacity  # Update the internal capacity value
                 print(f"Optimized capacity for slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
+
+    def allocate_resources_based_on_priority(self):
+        """Allocate resources to slices based on their priority."""
+        for bs in self.base_stations:
+            total_available_capacity = sum(sl.capacity.level for sl in bs.slices)
+            if total_available_capacity > 0:
+                # Sort slices by QoS class (lower value indicates higher priority)
+                sorted_slices = sorted(bs.slices, key=lambda sl: sl.qos_class)
+                for sl in sorted_slices:
+                    # Allocate resources proportionally based on guaranteed bandwidth
+                    allocation = (sl.bandwidth_guaranteed / bs.capacity_bandwidth) * total_available_capacity
+                    if sl.capacity.level < allocation:
+                        additional_capacity = allocation - sl.capacity.level
+                        sl.capacity.put(additional_capacity)
+                        sl.capacity._capacity += additional_capacity
+                        print(f"Allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
+
+    def allocate_resources(self, action):
+        """Allocate resources based on the action chosen by the DQN agent."""
+        for i, bs in enumerate(self.base_stations):
+            if i == action:
+                for sl in bs.slices:
+                    additional_capacity = sl.capacity_bandwidth * self.capacity_adjustment_factor
+                    sl.capacity.put(additional_capacity)
+                    sl.capacity._capacity += additional_capacity
+                    print(f"DQN allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
