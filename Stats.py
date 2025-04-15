@@ -248,3 +248,50 @@ class Stats:
                     sl.capacity.put(additional_capacity)
                     sl.capacity._capacity += additional_capacity
                     print(f"DQN allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
+
+    def dynamic_adjustment_loop(self):
+        """Dynamically adjust thresholds and capacity adjustment factor."""
+        while True:
+            yield self.env.timeout(10)  # Adjust every 10 simulation seconds
+
+            # Calculate recent average block ratio
+            if len(self.block_count) > 10:
+                recent_block_ratio = mean(self.block_count[-10:])
+            else:
+                recent_block_ratio = mean(self.block_count) if self.block_count else 0
+
+            # Adjust thresholds based on recent block ratio
+            if recent_block_ratio > self.block_ratio_upper_threshold:
+                self.block_ratio_upper_threshold += 0.01  # Increase upper threshold
+                self.capacity_adjustment_factor += 0.01  # Increase adjustment factor
+            elif recent_block_ratio < self.block_ratio_lower_threshold:
+                self.block_ratio_lower_threshold -= 0.01  # Decrease lower threshold
+                self.capacity_adjustment_factor -= 0.01  # Decrease adjustment factor
+
+            # Ensure thresholds and adjustment factor remain within valid bounds
+            self.block_ratio_upper_threshold = max(0.01, min(0.1, self.block_ratio_upper_threshold))
+            self.block_ratio_lower_threshold = max(0.001, min(0.05, self.block_ratio_lower_threshold))
+            self.capacity_adjustment_factor = max(0.1, min(0.5, self.capacity_adjustment_factor))
+
+            print(f"[{int(self.env.now)}] Adjusted thresholds: upper={self.block_ratio_upper_threshold:.3f}, "
+                  f"lower={self.block_ratio_lower_threshold:.3f}, adjustment_factor={self.capacity_adjustment_factor:.3f}")
+
+def optimize_thresholds(stats):
+    def objective(params):
+        upper_threshold, lower_threshold, adjustment_factor = params
+        stats.block_ratio_upper_threshold = upper_threshold
+        stats.block_ratio_lower_threshold = lower_threshold
+        stats.capacity_adjustment_factor = adjustment_factor
+        
+        # Run a simulation and return the average block ratio
+        avg_block_ratio = stats.run_simulation()  # Replace with actual simulation logic
+        return avg_block_ratio
+
+    space = [
+        Real(0.01, 0.1, name='block_ratio_upper_threshold'),
+        Real(0.001, 0.05, name='block_ratio_lower_threshold'),
+        Real(0.1, 0.5, name='capacity_adjustment_factor')
+    ]
+
+    result = gp_minimize(objective, space, n_calls=20, random_state=42)
+    return result.x  # Optimal parameters

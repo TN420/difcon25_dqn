@@ -155,6 +155,10 @@ def monitor_anomalies(env, stats):
             stats.adjust_base_station_capacity()  # Trigger Bayesian optimization
 
 env.process(monitor_anomalies(env, stats))
+
+# Start dynamic adjustment loop
+env.process(stats.dynamic_adjustment_loop())
+
 env.run(until=int(SETTINGS['simulation_time']))
 
 for client in clients:

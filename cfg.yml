@@ -1,7 +1,7 @@
 # YAML config file
 
 settings:
-  simulation_time: 3600
+  simulation_time: 180
   num_clients: 1000
   limit_closest_base_stations: 1
   statistics_params:
@@ -25,7 +25,7 @@ settings:
     scatter_size: 15  
   block_ratio_upper_threshold: 0.03
   block_ratio_lower_threshold: 0.01
-  capacity_adjustment_factor: 0.1
+  capacity_adjustment_factor: 0.3
   
 slices:
   iot:
