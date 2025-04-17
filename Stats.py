@@ -4,8 +4,8 @@ from sklearn.ensemble import IsolationForest  # Import Isolation Forest
 from skopt import gp_minimize  # Import Bayesian optimization
 from skopt.space import Real
 from statistics import mean  # Add this import
-from DQNAgent import DQNAgent
 import numpy as np
+import random
 
 class Stats:
     def __init__(self, env, base_stations, clients, area):
@@ -33,11 +33,13 @@ class Stats:
         self.block_ratio_lower_threshold = 0.1  # Example lower threshold
         self.capacity_adjustment_factor = 0.1  # Adjust capacity by 10%
 
-        # DQN Agent
-        self.state_size = len(base_stations) + 1  # Example: base station capacities + block ratio
-        self.action_size = len(base_stations)  # Example: actions for each base station
-        self.dqn_agent = DQNAgent(self.state_size, self.action_size)
-        self.batch_size = 32
+        # Q-learning
+        self.q_table = {}  # Q-table for state-action values
+        self.learning_rate = 0.1  # Learning rate for Q-learning
+        self.discount_factor = 0.95  # Discount factor for future rewards
+        self.exploration_rate = 1.0  # Exploration rate for epsilon-greedy policy
+        self.exploration_decay = 0.995  # Decay rate for exploration
+        self.exploration_min = 0.01  # Minimum exploration rate
 
     def get_stats(self):
         return (
@@ -84,32 +86,60 @@ class Stats:
                 elif avg_block_ratio < self.block_ratio_lower_threshold:
                     self.decrease_base_station_capacity()
 
-            # Prepare state for DQN
-            state = np.array([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
-            state = np.reshape(state, [1, self.state_size])
+            # Prepare state for Q-learning
+            state = tuple([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
 
-            # Take action using DQN
-            action = self.dqn_agent.act(state)
+            # Choose action using epsilon-greedy policy
+            action = self.choose_action(state)
+
+            # Allocate resources based on the chosen action
             self.allocate_resources(action)
 
             # Calculate reward (negative block ratio)
             reward = -self.block_count[-1]
 
             # Prepare next state
-            next_state = np.array([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
-            next_state = np.reshape(next_state, [1, self.state_size])
+            next_state = tuple([sum(sl.capacity.level for sl in bs.slices) for bs in self.base_stations] + [self.block_count[-1]])
 
-            # Store experience in DQN memory
-            done = False  # Simulation is ongoing
-            self.dqn_agent.remember(state, action, reward, next_state, done)
+            # Update Q-table
+            self.update_q_table(state, action, reward, next_state)
 
-            # Train the DQN agent
-            self.dqn_agent.replay(self.batch_size)
+            # Decay exploration rate
+            if self.exploration_rate > self.exploration_min:
+                self.exploration_rate *= self.exploration_decay
 
             self.connect_attempt.append(0)
             self.block_count.append(0)
             self.handover_count.append(0)
             yield self.env.timeout(1)
+
+    def choose_action(self, state):
+        """Choose an action using epsilon-greedy policy."""
+        if random.random() < self.exploration_rate or state not in self.q_table:
+            return random.randint(0, len(self.base_stations) - 1)  # Random action
+        return max(self.q_table[state], key=self.q_table[state].get)  # Best action
+
+    def update_q_table(self, state, action, reward, next_state):
+        """Update Q-table using the Q-learning formula."""
+        if state not in self.q_table:
+            self.q_table[state] = {a: 0 for a in range(len(self.base_stations))}
+        if next_state not in self.q_table:
+            self.q_table[next_state] = {a: 0 for a in range(len(self.base_stations))}
+
+        best_next_action = max(self.q_table[next_state], key=self.q_table[next_state].get)
+        td_target = reward + self.discount_factor * self.q_table[next_state][best_next_action]
+        td_error = td_target - self.q_table[state][action]
+        self.q_table[state][action] += self.learning_rate * td_error
+
+    def allocate_resources(self, action):
+        """Allocate resources based on the chosen action."""
+        for i, bs in enumerate(self.base_stations):
+            if i == action:
+                for sl in bs.slices:
+                    additional_capacity = sl.capacity_bandwidth * self.capacity_adjustment_factor
+                    sl.capacity.put(additional_capacity)
+                    sl.capacity._capacity += additional_capacity
+                    print(f"Q-learning allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
 
     def increase_base_station_capacity(self):
         """Increase base station capacity."""
@@ -238,16 +268,6 @@ class Stats:
                         sl.capacity.put(additional_capacity)
                         sl.capacity._capacity += additional_capacity
                         print(f"Allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
-
-    def allocate_resources(self, action):
-        """Allocate resources based on the action chosen by the DQN agent."""
-        for i, bs in enumerate(self.base_stations):
-            if i == action:
-                for sl in bs.slices:
-                    additional_capacity = sl.capacity_bandwidth * self.capacity_adjustment_factor
-                    sl.capacity.put(additional_capacity)
-                    sl.capacity._capacity += additional_capacity
-                    print(f"DQN allocated additional capacity to slice {sl.name} at BaseStation {bs.pk}. New capacity: {sl.capacity.capacity}")
 
     def dynamic_adjustment_loop(self):
         """Dynamically adjust thresholds and capacity adjustment factor."""
